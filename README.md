@@ -1,4 +1,4 @@
-check it out: something-lovat.vercel.app
+check it out: [something-lovat.vercel.app]()
 
 ok cool, but how do i run this thing on my own machine?
 
