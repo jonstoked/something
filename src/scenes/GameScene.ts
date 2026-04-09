@@ -30,7 +30,7 @@ function sampleRainbow(t: number): number {
 const CIRCLE_RADII = [20, 30, 40, 50, 60, 70, 80]; // index 0 = innermost (player)
 
 const JOINT_DISTANCE = 17;
-const MOVE_SPEED = 4;
+const MOVE_SPEED = 8;
 const CONSTRAINT_STIFFNESS = 0.08;
 const CONSTRAINT_DAMPING = 0.05;
 
@@ -39,7 +39,7 @@ const CHAIN_CATEGORY = 0x0002;
 const CHAIN_MASK = 0x0001;
 
 // How fast the color wave drifts from head toward tail (units: rainbow positions per second)
-const COLOR_DRIFT_SPEED = 0.4;
+const COLOR_DRIFT_SPEED = 0.8;
 
 export class GameScene extends Phaser.Scene {
   private starField!: StarField;
@@ -160,8 +160,8 @@ export class GameScene extends Phaser.Scene {
 
       const { x, y } = body.position;
       const radius = CIRCLE_RADII[i];
-      // i=0 (head) samples colorOffset; each step back is +1 along the rainbow
-      const color = sampleRainbow(this.colorOffset + i);
+      // i=0 (head) samples colorOffset; each step back is -1 so head color leads the wave
+      const color = sampleRainbow(this.colorOffset - i);
 
       gfx.clear();
       gfx.fillStyle(color, 1);
