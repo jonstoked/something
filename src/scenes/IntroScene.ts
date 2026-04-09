@@ -165,7 +165,7 @@ export class IntroScene extends Phaser.Scene {
     label.setInteractive({ useHandCursor: true });
 
     label.on('pointerover', () => label.setStyle({ color: '#ffffff', backgroundColor: '#333333' }));
-    label.on('pointerout',  () => label.setStyle({ color: '#000000', backgroundColor: '#ffffff' }));
+    label.on('pointerout', () => label.setStyle({ color: '#000000', backgroundColor: '#ffffff' }));
     label.on('pointerdown', () => this.scene.start('GameScene'));
 
     if (animate) {
