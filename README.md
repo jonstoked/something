@@ -1,73 +1,28 @@
-# React + TypeScript + Vite
+check it out: something-lovat.vercel.app
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+ok cool, but how do i run this thing on my own machine?
 
-Currently, two official plugins are available:
+1. install vs code
+2. [install node.js](https://www.youtube.com/watch?v=YbwagbZef5w)
+3. download the code (add link)
+4. [open the code in vs code](https://www.youtube.com/watch?v=eZAT6fwMVgY)
+5. install the project by typing "npm install"
+6. run the project by typing "npm dev"
+7. in the terminal you'll see the url where the game is running, usually something like http://localhost:5173/.  go there to play the game
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+ok cool yeah i get it, but how do i add my own code?
 
-## React Compiler
+1. [create a github account](https://github.com/signup)
+2. email me your github user name and i'll add you as a collaborator on the project
+3. [install git](https://www.youtube.com/watch?v=t2-l3WvWvqg)
+4. [learn how to *commit* and *push* in git](https://www.youtube.com/watch?v=z5jZ9lrSpqk) 
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+what do you think about this Skyler... we just go back and forth and add new stuff to the game. no discussion, you just do whatever you want with it now and when you're done, i'll pick up the baton. then if we want to keep going or build something else, we can.
 
-## Expanding the ESLint configuration
+take as long as you want. four hours, four weeks, whatever.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+i built this with phaser, you can learn more about it here https://docs.phaser.io/
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+i've called the project "something" for now... it needs a name
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
-
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+reach out any time with questions
