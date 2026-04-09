@@ -44,6 +44,7 @@ export class IntroScene extends Phaser.Scene {
   private allTextObjects: Phaser.GameObjects.Text[] = [];
   private lineIndex = 0;
   private startY = 0;
+  private didFastForward = false;
 
   constructor() {
     super({ key: 'IntroScene' });
@@ -53,13 +54,39 @@ export class IntroScene extends Phaser.Scene {
     this.starField = new StarField(this);
     this.allTextObjects = [];
     this.lineIndex = 0;
+    this.didFastForward = false;
 
     const { height } = this.scale;
     const totalBlockHeight = INTRO_LINES.length * LINE_HEIGHT;
-    // Centre the text block; leave 80px below for the button
     this.startY = Math.max(20, (height - totalBlockHeight - 80) / 2);
 
     this.scheduleNextLine();
+
+    // Any key or mouse click fast-forwards the reveal
+    this.input.keyboard!.on('keydown', this.fastForward, this);
+    this.input.on('pointerdown', this.fastForward, this);
+  }
+
+  private fastForward(): void {
+    if (this.didFastForward) return;
+    this.didFastForward = true;
+
+    // Stop all pending timers and snap existing text to full opacity
+    this.time.removeAllEvents();
+    this.tweens.killAll();
+    this.allTextObjects.forEach(t => t.setAlpha(1));
+
+    // Render every remaining line immediately at full alpha
+    while (this.lineIndex < INTRO_LINES.length) {
+      const raw = INTRO_LINES[this.lineIndex];
+      const y = this.startY + this.lineIndex * LINE_HEIGHT;
+      if (raw !== '') {
+        this.renderSegmentedLine(raw, y, false);
+      }
+      this.lineIndex++;
+    }
+
+    this.showButton(false);
   }
 
   private scheduleNextLine(): void {
@@ -90,11 +117,10 @@ export class IntroScene extends Phaser.Scene {
 
   // Splits a line on [redacted], creates one Text per segment,
   // measures total width, then centres the group horizontally.
-  private renderSegmentedLine(raw: string, y: number): void {
+  private renderSegmentedLine(raw: string, y: number, animate = true): void {
     const { width } = this.scale;
     const segments = parseLine(raw);
 
-    // Create text objects at a temp position to measure them
     const txts = segments.map(seg =>
       this.add.text(0, 0, seg.text, {
         fontFamily: FONT,
@@ -108,15 +134,19 @@ export class IntroScene extends Phaser.Scene {
 
     for (const txt of txts) {
       txt.setPosition(x, y);
-      txt.setAlpha(0);
       txt.setDepth(1);
-      this.tweens.add({ targets: txt, alpha: 1, duration: 500, ease: 'Sine.easeIn' });
+      if (animate) {
+        txt.setAlpha(0);
+        this.tweens.add({ targets: txt, alpha: 1, duration: 500, ease: 'Sine.easeIn' });
+      } else {
+        txt.setAlpha(1);
+      }
       x += txt.width;
       this.allTextObjects.push(txt);
     }
   }
 
-  private showButton(): void {
+  private showButton(animate = true): void {
     const { width } = this.scale;
     const buttonY = this.startY + INTRO_LINES.length * LINE_HEIGHT + 32;
 
@@ -130,7 +160,7 @@ export class IntroScene extends Phaser.Scene {
 
     // Centre the button horizontally under the text block
     label.setPosition(width / 2 - label.width / 2, buttonY);
-    label.setAlpha(0);
+    label.setAlpha(animate ? 0 : 1);
     label.setDepth(2);
     label.setInteractive({ useHandCursor: true });
 
@@ -138,7 +168,9 @@ export class IntroScene extends Phaser.Scene {
     label.on('pointerout',  () => label.setStyle({ color: '#000000', backgroundColor: '#ffffff' }));
     label.on('pointerdown', () => this.scene.start('GameScene'));
 
-    this.tweens.add({ targets: label, alpha: 1, duration: 600, ease: 'Sine.easeIn' });
+    if (animate) {
+      this.tweens.add({ targets: label, alpha: 1, duration: 600, ease: 'Sine.easeIn' });
+    }
     this.allTextObjects.push(label);
   }
 
@@ -147,6 +179,8 @@ export class IntroScene extends Phaser.Scene {
   }
 
   shutdown(): void {
+    this.input.keyboard!.off('keydown', this.fastForward, this);
+    this.input.off('pointerdown', this.fastForward, this);
     this.starField?.destroy();
     this.allTextObjects.forEach(t => t.destroy());
     this.allTextObjects = [];
