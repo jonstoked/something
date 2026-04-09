@@ -1,29 +1,51 @@
 import Phaser from 'phaser';
 import { StarField } from './StarField';
 
-const CIRCLE_DEFS = [
-  { radius: 20, color: 0xff2222 },  // red     - player (innermost)
-  { radius: 30, color: 0xff8800 },  // orange
-  { radius: 40, color: 0xffee00 },  // yellow
-  { radius: 50, color: 0x22cc44 },  // green
-  { radius: 60, color: 0x2266ff },  // blue
-  { radius: 70, color: 0x4400cc },  // indigo
-  { radius: 80, color: 0xaa44ff },  // violet
+// ROYGBIV as [r, g, b] triplets for smooth lerping
+const RAINBOW: [number, number, number][] = [
+  [0xff, 0x22, 0x22],  // red
+  [0xff, 0x88, 0x00],  // orange
+  [0xff, 0xee, 0x00],  // yellow
+  [0x22, 0xcc, 0x44],  // green
+  [0x22, 0x66, 0xff],  // blue
+  [0x44, 0x00, 0xcc],  // indigo
+  [0xaa, 0x44, 0xff],  // violet
 ];
 
-const JOINT_DISTANCE = 17;         // slightly less than smallest radius (20)
+// Sample a smoothly interpolated rainbow color at position t (wraps at 7)
+function sampleRainbow(t: number): number {
+  const n = RAINBOW.length;
+  const wrapped = ((t % n) + n) % n;
+  const lo = Math.floor(wrapped);
+  const hi = (lo + 1) % n;
+  const f = wrapped - lo;
+  const [r0, g0, b0] = RAINBOW[lo];
+  const [r1, g1, b1] = RAINBOW[hi];
+  const r = Math.round(r0 + (r1 - r0) * f);
+  const g = Math.round(g0 + (g1 - g0) * f);
+  const b = Math.round(b0 + (b1 - b0) * f);
+  return (r << 16) | (g << 8) | b;
+}
+
+const CIRCLE_RADII = [20, 30, 40, 50, 60, 70, 80]; // index 0 = innermost (player)
+
+const JOINT_DISTANCE = 17;
 const MOVE_SPEED = 4;
 const CONSTRAINT_STIFFNESS = 0.08;
 const CONSTRAINT_DAMPING = 0.05;
 
-// All chain circles share this category and mask each other out — no inter-circle collisions
+// Circles don't collide with each other
 const CHAIN_CATEGORY = 0x0002;
 const CHAIN_MASK = 0x0001;
+
+// How fast the color wave drifts from head toward tail (units: rainbow positions per second)
+const COLOR_DRIFT_SPEED = 0.4;
 
 export class GameScene extends Phaser.Scene {
   private starField!: StarField;
   private bodies: MatterJS.BodyType[] = [];
   private graphics: Phaser.GameObjects.Graphics[] = [];
+  private colorOffset = 0;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasd!: {
     up: Phaser.Input.Keyboard.Key;
@@ -38,6 +60,7 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     this.starField = new StarField(this);
+    this.colorOffset = 0;
 
     const { width, height } = this.scale;
     const cx = width / 2;
@@ -46,32 +69,27 @@ export class GameScene extends Phaser.Scene {
     this.bodies = [];
     this.graphics = [];
 
-    // Create circles from outermost to innermost so innermost renders on top
-    for (let i = CIRCLE_DEFS.length - 1; i >= 0; i--) {
-      const def = CIRCLE_DEFS[i];
-      const body = this.matter.add.circle(cx, cy, def.radius, {
+    for (let i = 0; i < CIRCLE_RADII.length; i++) {
+      const radius = CIRCLE_RADII[i];
+
+      const body = this.matter.add.circle(cx, cy, radius, {
         frictionAir: 0.12,
         restitution: 0.1,
-        mass: def.radius * 0.5,
+        mass: radius * 0.5,
         label: `circle_${i}`,
-        collisionFilter: {
-          category: CHAIN_CATEGORY,
-          mask: CHAIN_MASK,
-        },
+        collisionFilter: { category: CHAIN_CATEGORY, mask: CHAIN_MASK },
       });
       this.bodies[i] = body;
 
       const gfx = this.add.graphics();
-      gfx.fillStyle(def.color, 1);
-      gfx.fillCircle(0, 0, def.radius);
-      gfx.lineStyle(1, 0xffffff, 0.15);
-      gfx.strokeCircle(0, 0, def.radius);
-      gfx.setDepth(i);
+      // Smaller index = smaller circle = renders on top
+      // Depth: invert so i=0 (innermost) has highest depth
+      gfx.setDepth(CIRCLE_RADII.length - i);
       this.graphics[i] = gfx;
     }
 
-    // Connect each circle to the next via a constraint (chain: 0→1→2...→6)
-    for (let i = 0; i < CIRCLE_DEFS.length - 1; i++) {
+    // Chain: 0 (head) → 1 → 2 → … → 6 (tail)
+    for (let i = 0; i < CIRCLE_RADII.length - 1; i++) {
       this.matter.add.constraint(
         this.bodies[i],
         this.bodies[i + 1],
@@ -81,7 +99,7 @@ export class GameScene extends Phaser.Scene {
       );
     }
 
-    // HUD: top-left status text
+    // HUD
     this.add.text(12, 12, '{{null | void}}', {
       fontFamily: '"Press Start 2P"',
       fontSize: '10px',
@@ -98,10 +116,11 @@ export class GameScene extends Phaser.Scene {
     };
   }
 
-  update(time: number): void {
+  update(time: number, delta: number): void {
     this.starField.update(time);
+    this.colorOffset += (delta / 1000) * COLOR_DRIFT_SPEED;
     this.handleInput();
-    this.syncGraphics();
+    this.drawCircles();
     this.wrapBounds();
   }
 
@@ -132,13 +151,23 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private syncGraphics(): void {
+  // Redraw each circle each frame with its current interpolated color and physics position
+  private drawCircles(): void {
     for (let i = 0; i < this.bodies.length; i++) {
       const body = this.bodies[i];
       const gfx = this.graphics[i];
-      if (body && gfx) {
-        gfx.setPosition(body.position.x, body.position.y);
-      }
+      if (!body || !gfx) continue;
+
+      const { x, y } = body.position;
+      const radius = CIRCLE_RADII[i];
+      // i=0 (head) samples colorOffset; each step back is +1 along the rainbow
+      const color = sampleRainbow(this.colorOffset + i);
+
+      gfx.clear();
+      gfx.fillStyle(color, 1);
+      gfx.fillCircle(x, y, radius);
+      gfx.lineStyle(1, 0xffffff, 0.15);
+      gfx.strokeCircle(x, y, radius);
     }
   }
 
