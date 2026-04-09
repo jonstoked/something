@@ -37,7 +37,7 @@ const CHAIN_CATEGORY = 0x0002;
 const CHAIN_MASK = 0x0001;
 
 // How fast the color wave drifts from head toward tail (units: rainbow positions per second)
-const COLOR_DRIFT_SPEED = 0.8;
+const COLOR_DRIFT_SPEED = 4;
 
 export class GameScene extends Phaser.Scene {
   private starField!: StarField;
@@ -117,7 +117,7 @@ export class GameScene extends Phaser.Scene {
   // so turning tightly doesn't push later circles out of the way.
   private enforceChain(): void {
     for (let i = 0; i < this.bodies.length - 1; i++) {
-      const leader   = this.bodies[i];
+      const leader = this.bodies[i];
       const follower = this.bodies[i + 1];
       if (!leader || !follower) continue;
 
