@@ -3,16 +3,15 @@ import { StarField } from './StarField';
 
 // ROYGBIV as [r, g, b] triplets for smooth lerping
 const RAINBOW: [number, number, number][] = [
-  [0xff, 0x22, 0x22],  // red
-  [0xff, 0x88, 0x00],  // orange
-  [0xff, 0xee, 0x00],  // yellow
-  [0x22, 0xcc, 0x44],  // green
-  [0x22, 0x66, 0xff],  // blue
-  [0x44, 0x00, 0xcc],  // indigo
-  [0xaa, 0x44, 0xff],  // violet
+  [0xff, 0x22, 0x22],
+  [0xff, 0x88, 0x00],
+  [0xff, 0xee, 0x00],
+  [0x22, 0xcc, 0x44],
+  [0x22, 0x66, 0xff],
+  [0x44, 0x00, 0xcc],
+  [0xaa, 0x44, 0xff],
 ];
 
-// Sample a smoothly interpolated rainbow color at position t (wraps at 7)
 function sampleRainbow(t: number): number {
   const n = RAINBOW.length;
   const wrapped = ((t % n) + n) % n;
@@ -27,22 +26,34 @@ function sampleRainbow(t: number): number {
   return (r << 16) | (g << 8) | b;
 }
 
-const CIRCLE_RADII = [20, 30, 40, 50, 60, 70, 80]; // index 0 = innermost (player)
+const CIRCLE_RADII = [20, 30, 40, 50, 60, 70, 80];
 
 const JOINT_DISTANCE = 17;
 const MOVE_SPEED = 8;
-
-// Circles don't collide with each other
-const CHAIN_CATEGORY = 0x0002;
-const CHAIN_MASK = 0x0001;
-
-// How fast the color wave drifts from head toward tail (units: rainbow positions per second)
 const COLOR_DRIFT_SPEED = 4;
+
+// Collision categories
+// Worm segments don't collide with each other, but do push shapes.
+// Shapes collide with worm AND with each other.
+const CHAIN_CATEGORY = 0x0002;
+const SHAPE_CATEGORY = 0x0004;
+const CHAIN_MASK = SHAPE_CATEGORY;                    // hits shapes only
+const SHAPE_MASK = SHAPE_CATEGORY | CHAIN_CATEGORY;  // hits shapes + worm
+
+
+interface ShapeData {
+  body: MatterJS.BodyType;
+  gfx: Phaser.GameObjects.Graphics;
+  color: number;
+  isCircle: boolean;
+  radius: number; // used when isCircle=true
+}
 
 export class GameScene extends Phaser.Scene {
   private starField!: StarField;
   private bodies: MatterJS.BodyType[] = [];
   private graphics: Phaser.GameObjects.Graphics[] = [];
+  private shapes: ShapeData[] = [];
   private colorOffset = 0;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasd!: {
@@ -59,6 +70,7 @@ export class GameScene extends Phaser.Scene {
   create(): void {
     this.starField = new StarField(this);
     this.colorOffset = 0;
+    this.shapes = [];
 
     const { width, height } = this.scale;
     const cx = width / 2;
@@ -69,10 +81,9 @@ export class GameScene extends Phaser.Scene {
 
     for (let i = 0; i < CIRCLE_RADII.length; i++) {
       const radius = CIRCLE_RADII[i];
-
       const body = this.matter.add.circle(cx, cy, radius, {
         frictionAir: 0.12,
-        restitution: 0.1,
+        restitution: 0.2,
         mass: radius * 0.5,
         label: `circle_${i}`,
         collisionFilter: { category: CHAIN_CATEGORY, mask: CHAIN_MASK },
@@ -80,11 +91,11 @@ export class GameScene extends Phaser.Scene {
       this.bodies[i] = body;
 
       const gfx = this.add.graphics();
-      // Smaller index = smaller circle = renders on top
-      // Depth: invert so i=0 (innermost) has highest depth
       gfx.setDepth(CIRCLE_RADII.length - i);
       this.graphics[i] = gfx;
     }
+
+    this.spawnShapes(width, height, cx, cy);
 
     // HUD
     this.add.text(12, 12, '{{null | void}}', {
@@ -103,50 +114,37 @@ export class GameScene extends Phaser.Scene {
     };
   }
 
+  private spawnShapes(width: number, height: number, cx: number, cy: number): void {
+    // One frictionless circle — once hit it glides forever and wraps at edges
+    let x: number, y: number;
+    do {
+      x = Phaser.Math.FloatBetween(80, width - 80);
+      y = Phaser.Math.FloatBetween(80, height - 80);
+    } while (Math.hypot(x - cx, y - cy) < 160);
+
+    const radius = 22;
+    const body = this.matter.add.circle(x, y, radius, {
+      frictionAir: 0,
+      friction: 0,
+      restitution: 1,
+      mass: 3,
+      collisionFilter: { category: SHAPE_CATEGORY, mask: SHAPE_MASK },
+    });
+
+    const gfx = this.add.graphics();
+    gfx.setDepth(0);
+
+    this.shapes.push({ body, gfx, color: 0xffffff, isCircle: true, radius });
+  }
+
   update(time: number, delta: number): void {
     this.starField.update(time);
     this.colorOffset += (delta / 1000) * COLOR_DRIFT_SPEED;
     this.handleInput();
     this.enforceChain();
     this.drawCircles();
+    this.drawShapes();
     this.wrapBounds();
-  }
-
-  // Pull-only rope constraint: only activates when a pair is stretched beyond
-  // JOINT_DISTANCE. When within range, neighbours are left completely alone
-  // so turning tightly doesn't push later circles out of the way.
-  private enforceChain(): void {
-    for (let i = 0; i < this.bodies.length - 1; i++) {
-      const leader = this.bodies[i];
-      const follower = this.bodies[i + 1];
-      if (!leader || !follower) continue;
-
-      const dx = follower.position.x - leader.position.x;
-      const dy = follower.position.y - leader.position.y;
-      const distSq = dx * dx + dy * dy;
-
-      // Within the slack zone — do nothing
-      if (distSq <= JOINT_DISTANCE * JOINT_DISTANCE) continue;
-
-      const dist = Math.sqrt(distSq);
-      const nx = dx / dist; // unit vector: leader → follower
-      const ny = dy / dist;
-
-      // Hard-snap follower to exactly JOINT_DISTANCE behind leader
-      this.matter.body.setPosition(follower, {
-        x: leader.position.x + nx * JOINT_DISTANCE,
-        y: leader.position.y + ny * JOINT_DISTANCE,
-      });
-
-      // Cancel the velocity component that would stretch the joint further
-      const vDot = follower.velocity.x * nx + follower.velocity.y * ny;
-      if (vDot > 0) {
-        this.matter.body.setVelocity(follower, {
-          x: follower.velocity.x - vDot * nx,
-          y: follower.velocity.y - vDot * ny,
-        });
-      }
-    }
   }
 
   private handleInput(): void {
@@ -176,7 +174,38 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  // Redraw each circle each frame with its current interpolated color and physics position
+  // Pull-only rope: only activates when a pair is stretched beyond JOINT_DISTANCE.
+  private enforceChain(): void {
+    for (let i = 0; i < this.bodies.length - 1; i++) {
+      const leader = this.bodies[i];
+      const follower = this.bodies[i + 1];
+      if (!leader || !follower) continue;
+
+      const dx = follower.position.x - leader.position.x;
+      const dy = follower.position.y - leader.position.y;
+      const distSq = dx * dx + dy * dy;
+
+      if (distSq <= JOINT_DISTANCE * JOINT_DISTANCE) continue;
+
+      const dist = Math.sqrt(distSq);
+      const nx = dx / dist;
+      const ny = dy / dist;
+
+      this.matter.body.setPosition(follower, {
+        x: leader.position.x + nx * JOINT_DISTANCE,
+        y: leader.position.y + ny * JOINT_DISTANCE,
+      });
+
+      const vDot = follower.velocity.x * nx + follower.velocity.y * ny;
+      if (vDot > 0) {
+        this.matter.body.setVelocity(follower, {
+          x: follower.velocity.x - vDot * nx,
+          y: follower.velocity.y - vDot * ny,
+        });
+      }
+    }
+  }
+
   private drawCircles(): void {
     for (let i = 0; i < this.bodies.length; i++) {
       const body = this.bodies[i];
@@ -185,7 +214,6 @@ export class GameScene extends Phaser.Scene {
 
       const { x, y } = body.position;
       const radius = CIRCLE_RADII[i];
-      // i=0 (head) samples colorOffset; each step back is -1 so head color leads the wave
       const color = sampleRainbow(this.colorOffset - i);
 
       gfx.clear();
@@ -196,31 +224,59 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private drawShapes(): void {
+    for (const s of this.shapes) {
+      s.gfx.clear();
+      s.gfx.fillStyle(s.color, 0.85);
+      s.gfx.lineStyle(1, 0xffffff, 0.25);
+
+      if (s.isCircle) {
+        const { x, y } = s.body.position;
+        s.gfx.fillCircle(x, y, s.radius);
+        s.gfx.strokeCircle(x, y, s.radius);
+      } else {
+        const verts = s.body.vertices;
+        if (!verts || verts.length === 0) continue;
+        s.gfx.beginPath();
+        s.gfx.moveTo(verts[0]!.x, verts[0]!.y);
+        for (let i = 1; i < verts.length; i++) {
+          s.gfx.lineTo(verts[i]!.x, verts[i]!.y);
+        }
+        s.gfx.closePath();
+        s.gfx.fillPath();
+        s.gfx.strokePath();
+      }
+    }
+  }
+
   private wrapBounds(): void {
     const { width, height } = this.scale;
     const pad = 100;
 
+    // Wrap worm bodies
     for (const body of this.bodies) {
       if (!body) continue;
       const { x, y } = body.position;
-      let nx = x;
-      let ny = y;
+      const nx = x < -pad ? width + pad : x > width + pad ? -pad : x;
+      const ny = y < -pad ? height + pad : y > height + pad ? -pad : y;
+      if (nx !== x || ny !== y) this.matter.body.setPosition(body, { x: nx, y: ny });
+    }
 
-      if (x < -pad) nx = width + pad;
-      else if (x > width + pad) nx = -pad;
-      if (y < -pad) ny = height + pad;
-      else if (y > height + pad) ny = -pad;
-
-      if (nx !== x || ny !== y) {
-        this.matter.body.setPosition(body, { x: nx, y: ny });
-      }
+    // Wrap shape bodies
+    for (const s of this.shapes) {
+      const { x, y } = s.body.position;
+      const nx = x < -pad ? width + pad : x > width + pad ? -pad : x;
+      const ny = y < -pad ? height + pad : y > height + pad ? -pad : y;
+      if (nx !== x || ny !== y) this.matter.body.setPosition(s.body, { x: nx, y: ny });
     }
   }
 
   shutdown(): void {
     this.starField?.destroy();
     this.graphics.forEach(g => g?.destroy());
+    this.shapes.forEach(s => s.gfx.destroy());
     this.graphics = [];
     this.bodies = [];
+    this.shapes = [];
   }
 }
