@@ -1,6 +1,5 @@
 import Phaser from 'phaser';
 import { StarField } from './StarField';
-import { EventBus, EVENTS } from '../game/EventBus';
 
 const CIRCLE_DEFS = [
   { radius: 20, color: 0xff2222 },  // red     - player (innermost)
@@ -12,14 +11,14 @@ const CIRCLE_DEFS = [
   { radius: 80, color: 0xaa44ff },  // violet
 ];
 
-const JOINT_DISTANCE = 17;   // slightly less than smallest radius (20)
+const JOINT_DISTANCE = 17;         // slightly less than smallest radius (20)
 const MOVE_SPEED = 4;
 const CONSTRAINT_STIFFNESS = 0.08;
 const CONSTRAINT_DAMPING = 0.05;
 
 // All chain circles share this category and mask each other out — no inter-circle collisions
 const CHAIN_CATEGORY = 0x0002;
-const CHAIN_MASK = 0x0001; // only collide with category 0x0001 (nothing in this scene)
+const CHAIN_MASK = 0x0001;
 
 export class GameScene extends Phaser.Scene {
   private starField!: StarField;
@@ -63,10 +62,8 @@ export class GameScene extends Phaser.Scene {
       this.bodies[i] = body;
 
       const gfx = this.add.graphics();
-      // Draw filled circle with rainbow color
       gfx.fillStyle(def.color, 1);
       gfx.fillCircle(0, 0, def.radius);
-      // Thin white outline for definition
       gfx.lineStyle(1, 0xffffff, 0.15);
       gfx.strokeCircle(0, 0, def.radius);
       gfx.setDepth(i);
@@ -84,6 +81,13 @@ export class GameScene extends Phaser.Scene {
       );
     }
 
+    // HUD: top-left status text
+    this.add.text(12, 12, '{{null | void}}', {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '10px',
+      color: '#ffffff',
+    }).setAlpha(0.85).setDepth(100).setScrollFactor(0);
+
     // Input
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.wasd = {
@@ -92,9 +96,6 @@ export class GameScene extends Phaser.Scene {
       left: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A),
       right: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D),
     };
-
-    // Let React know game scene started (for GameUI)
-    EventBus.emit('game-scene-ready');
   }
 
   update(time: number): void {
@@ -122,7 +123,6 @@ export class GameScene extends Phaser.Scene {
     if (down) vy += MOVE_SPEED;
 
     if (vx !== 0 || vy !== 0) {
-      // Normalize diagonal
       if (vx !== 0 && vy !== 0) {
         const factor = 1 / Math.sqrt(2);
         vx *= factor;
@@ -170,8 +170,3 @@ export class GameScene extends Phaser.Scene {
     this.bodies = [];
   }
 }
-
-// Listen for start-game event to transition to this scene
-EventBus.on(EVENTS.START_GAME, () => {
-  // The scene transition is triggered from PhaserGame component
-});

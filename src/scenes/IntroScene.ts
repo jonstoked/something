@@ -1,8 +1,18 @@
 import Phaser from 'phaser';
 import { StarField } from './StarField';
-import { EventBus, EVENTS } from '../game/EventBus';
 
-const INTRO_TEXT = [
+// Each line is an array of segments; [redacted] tokens get a different color.
+type Segment = { text: string; yellow: boolean };
+
+function parseLine(raw: string): Segment[] {
+  const parts = raw.split(/(\[redacted\])/);
+  return parts
+    .filter(p => p.length > 0)
+    .map(p => ({ text: p, yellow: p === '[redacted]' }));
+}
+
+// '' entries become blank spacer lines.
+const INTRO_LINES = [
   'the basement creeper society',
   'met last thursday to determine',
   'the whereabouts of the lost',
@@ -23,11 +33,17 @@ const INTRO_TEXT = [
   "you're our only hope",
 ];
 
+const FONT = '"Press Start 2P"';
+const FONT_SIZE = '11px';
+const LINE_HEIGHT = 28;
+const TEXT_COLOR = '#cccccc';
+const REDACTED_COLOR = '#ffee44';
+
 export class IntroScene extends Phaser.Scene {
   private starField!: StarField;
-  private textObjects: Phaser.GameObjects.Text[] = [];
+  private allTextObjects: Phaser.GameObjects.Text[] = [];
   private lineIndex = 0;
-  private revealTimer?: Phaser.Time.TimerEvent;
+  private startY = 0;
 
   constructor() {
     super({ key: 'IntroScene' });
@@ -35,63 +51,95 @@ export class IntroScene extends Phaser.Scene {
 
   create(): void {
     this.starField = new StarField(this);
-    this.textObjects = [];
+    this.allTextObjects = [];
     this.lineIndex = 0;
+
+    const { height } = this.scale;
+    const totalBlockHeight = INTRO_LINES.length * LINE_HEIGHT;
+    // Centre the text block; leave 80px below for the button
+    this.startY = Math.max(20, (height - totalBlockHeight - 80) / 2);
+
     this.scheduleNextLine();
   }
 
   private scheduleNextLine(): void {
-    const delay = this.lineIndex === 0 ? 800 : 700;
-
-    this.revealTimer = this.time.addEvent({
-      delay,
+    this.time.addEvent({
+      delay: this.lineIndex === 0 ? 800 : 700,
       callback: this.revealLine,
       callbackScope: this,
     });
   }
 
   private revealLine(): void {
-    if (this.lineIndex >= INTRO_TEXT.length) {
-      // All lines revealed — signal React to show the button
-      this.time.delayedCall(600, () => {
-        EventBus.emit(EVENTS.INTRO_COMPLETE);
-      });
+    if (this.lineIndex >= INTRO_LINES.length) {
+      // All lines done — show the button after a short pause
+      this.time.delayedCall(600, this.showButton, [], this);
       return;
     }
 
-    const line = INTRO_TEXT[this.lineIndex];
-    const { width, height } = this.scale;
+    const raw = INTRO_LINES[this.lineIndex];
+    const y = this.startY + this.lineIndex * LINE_HEIGHT;
 
-    // Determine y position based on how many text objects are already placed
-    const totalLines = INTRO_TEXT.length;
-    const lineHeight = 28;
-    const totalTextHeight = totalLines * lineHeight;
-    const startY = (height - totalTextHeight) / 2;
-    const y = startY + this.lineIndex * lineHeight;
-
-    if (line !== '') {
-      const txt = this.add.text(width / 2, y, line, {
-        fontFamily: '"Press Start 2P"',
-        fontSize: '11px',
-        color: '#cccccc',
-        align: 'center',
-      });
-      txt.setOrigin(0.5, 0);
-      txt.setAlpha(0);
-      txt.setDepth(1);
-
-      this.tweens.add({
-        targets: txt,
-        alpha: 1,
-        duration: 500,
-        ease: 'Sine.easeIn',
-      });
-
-      this.textObjects.push(txt);
+    if (raw !== '') {
+      this.renderSegmentedLine(raw, y);
     }
 
     this.lineIndex++;
     this.scheduleNextLine();
+  }
+
+  // Splits a line on [redacted], creates one Text per segment,
+  // measures total width, then centres the group horizontally.
+  private renderSegmentedLine(raw: string, y: number): void {
+    const { width } = this.scale;
+    const segments = parseLine(raw);
+
+    // Create text objects at a temp position to measure them
+    const txts = segments.map(seg =>
+      this.add.text(0, 0, seg.text, {
+        fontFamily: FONT,
+        fontSize: FONT_SIZE,
+        color: seg.yellow ? REDACTED_COLOR : TEXT_COLOR,
+      })
+    );
+
+    const totalWidth = txts.reduce((sum, t) => sum + t.width, 0);
+    let x = (width - totalWidth) / 2;
+
+    for (const txt of txts) {
+      txt.setPosition(x, y);
+      txt.setAlpha(0);
+      txt.setDepth(1);
+      this.tweens.add({ targets: txt, alpha: 1, duration: 500, ease: 'Sine.easeIn' });
+      x += txt.width;
+      this.allTextObjects.push(txt);
+    }
+  }
+
+  private showButton(): void {
+    const { width } = this.scale;
+    const buttonY = this.startY + INTRO_LINES.length * LINE_HEIGHT + 32;
+
+    const label = this.add.text(0, 0, "let's go", {
+      fontFamily: FONT,
+      fontSize: FONT_SIZE,
+      color: '#000000',
+      backgroundColor: '#ffffff',
+      padding: { x: 20, y: 10 },
+    });
+
+    // Centre the button horizontally under the text block
+    label.setPosition(width / 2 - label.width / 2, buttonY);
+    label.setAlpha(0);
+    label.setDepth(2);
+    label.setInteractive({ useHandCursor: true });
+
+    label.on('pointerover', () => label.setStyle({ color: '#ffffff', backgroundColor: '#333333' }));
+    label.on('pointerout',  () => label.setStyle({ color: '#000000', backgroundColor: '#ffffff' }));
+    label.on('pointerdown', () => this.scene.start('GameScene'));
+
+    this.tweens.add({ targets: label, alpha: 1, duration: 600, ease: 'Sine.easeIn' });
+    this.allTextObjects.push(label);
   }
 
   update(time: number): void {
@@ -99,9 +147,8 @@ export class IntroScene extends Phaser.Scene {
   }
 
   shutdown(): void {
-    this.revealTimer?.remove();
     this.starField?.destroy();
-    this.textObjects.forEach(t => t.destroy());
-    this.textObjects = [];
+    this.allTextObjects.forEach(t => t.destroy());
+    this.allTextObjects = [];
   }
 }
