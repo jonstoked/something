@@ -17,6 +17,10 @@ const MOVE_SPEED = 4;
 const CONSTRAINT_STIFFNESS = 0.08;
 const CONSTRAINT_DAMPING = 0.05;
 
+// All chain circles share this category and mask each other out — no inter-circle collisions
+const CHAIN_CATEGORY = 0x0002;
+const CHAIN_MASK = 0x0001; // only collide with category 0x0001 (nothing in this scene)
+
 export class GameScene extends Phaser.Scene {
   private starField!: StarField;
   private bodies: MatterJS.BodyType[] = [];
@@ -51,6 +55,10 @@ export class GameScene extends Phaser.Scene {
         restitution: 0.1,
         mass: def.radius * 0.5,
         label: `circle_${i}`,
+        collisionFilter: {
+          category: CHAIN_CATEGORY,
+          mask: CHAIN_MASK,
+        },
       });
       this.bodies[i] = body;
 
