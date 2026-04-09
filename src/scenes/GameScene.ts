@@ -221,7 +221,49 @@ export class GameScene extends Phaser.Scene {
       gfx.fillCircle(x, y, radius);
       gfx.lineStyle(1, 0xffffff, 0.15);
       gfx.strokeCircle(x, y, radius);
+
+      if (i === 0) {
+        this.drawFace(gfx, x, y, body.angle);
+      }
     }
+  }
+
+  // Draws eyes and mouth as three equal-length horizontal black lines, rotated with the body.
+  private drawFace(gfx: Phaser.GameObjects.Graphics, cx: number, cy: number, angle: number): void {
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const w = (lx: number, ly: number) => ({
+      x: cx + lx * cos - ly * sin,
+      y: cy + lx * sin + ly * cos,
+    });
+
+    const hl = 4; // half-length of each line → 8px total
+
+    gfx.lineStyle(2, 0x000000, 1);
+
+    // Left eye
+    const le0 = w(-8 - hl, -5);
+    const le1 = w(-8 + hl, -5);
+    gfx.beginPath();
+    gfx.moveTo(le0.x, le0.y);
+    gfx.lineTo(le1.x, le1.y);
+    gfx.strokePath();
+
+    // Right eye
+    const re0 = w(8 - hl, -5);
+    const re1 = w(8 + hl, -5);
+    gfx.beginPath();
+    gfx.moveTo(re0.x, re0.y);
+    gfx.lineTo(re1.x, re1.y);
+    gfx.strokePath();
+
+    // Mouth
+    const mo0 = w(-hl, 6);
+    const mo1 = w(hl, 6);
+    gfx.beginPath();
+    gfx.moveTo(mo0.x, mo0.y);
+    gfx.lineTo(mo1.x, mo1.y);
+    gfx.strokePath();
   }
 
   private drawShapes(): void {
