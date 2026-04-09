@@ -31,8 +31,6 @@ const CIRCLE_RADII = [20, 30, 40, 50, 60, 70, 80]; // index 0 = innermost (playe
 
 const JOINT_DISTANCE = 17;
 const MOVE_SPEED = 8;
-const CONSTRAINT_STIFFNESS = 0.08;
-const CONSTRAINT_DAMPING = 0.05;
 
 // Circles don't collide with each other
 const CHAIN_CATEGORY = 0x0002;
@@ -88,17 +86,6 @@ export class GameScene extends Phaser.Scene {
       this.graphics[i] = gfx;
     }
 
-    // Chain: 0 (head) → 1 → 2 → … → 6 (tail)
-    for (let i = 0; i < CIRCLE_RADII.length - 1; i++) {
-      this.matter.add.constraint(
-        this.bodies[i],
-        this.bodies[i + 1],
-        JOINT_DISTANCE,
-        CONSTRAINT_STIFFNESS,
-        { damping: CONSTRAINT_DAMPING }
-      );
-    }
-
     // HUD
     this.add.text(12, 12, '{{null | void}}', {
       fontFamily: '"Press Start 2P"',
@@ -120,8 +107,46 @@ export class GameScene extends Phaser.Scene {
     this.starField.update(time);
     this.colorOffset += (delta / 1000) * COLOR_DRIFT_SPEED;
     this.handleInput();
+    this.enforceChain();
     this.drawCircles();
     this.wrapBounds();
+  }
+
+  // Pull-only rope constraint: only activates when a pair is stretched beyond
+  // JOINT_DISTANCE. When within range, neighbours are left completely alone
+  // so turning tightly doesn't push later circles out of the way.
+  private enforceChain(): void {
+    for (let i = 0; i < this.bodies.length - 1; i++) {
+      const leader   = this.bodies[i];
+      const follower = this.bodies[i + 1];
+      if (!leader || !follower) continue;
+
+      const dx = follower.position.x - leader.position.x;
+      const dy = follower.position.y - leader.position.y;
+      const distSq = dx * dx + dy * dy;
+
+      // Within the slack zone — do nothing
+      if (distSq <= JOINT_DISTANCE * JOINT_DISTANCE) continue;
+
+      const dist = Math.sqrt(distSq);
+      const nx = dx / dist; // unit vector: leader → follower
+      const ny = dy / dist;
+
+      // Hard-snap follower to exactly JOINT_DISTANCE behind leader
+      this.matter.body.setPosition(follower, {
+        x: leader.position.x + nx * JOINT_DISTANCE,
+        y: leader.position.y + ny * JOINT_DISTANCE,
+      });
+
+      // Cancel the velocity component that would stretch the joint further
+      const vDot = follower.velocity.x * nx + follower.velocity.y * ny;
+      if (vDot > 0) {
+        this.matter.body.setVelocity(follower, {
+          x: follower.velocity.x - vDot * nx,
+          y: follower.velocity.y - vDot * ny,
+        });
+      }
+    }
   }
 
   private handleInput(): void {
