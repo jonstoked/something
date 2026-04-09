@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Raw/source audio files (keep only processed cuts in public/)
+src/music/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
