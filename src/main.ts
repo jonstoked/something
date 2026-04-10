@@ -20,8 +20,9 @@ const config: Phaser.Types.Core.GameConfig = {
   },
 };
 
-// Wait for Google Font to fully load before starting the game
-// so Phaser text measurements are accurate from the first frame.
-document.fonts.ready.then(() => {
+// Explicitly load the exact font + size used by Phaser text objects.
+// document.fonts.ready only signals the fetch is done; fonts.load() blocks
+// until the specific glyph set is built and ready to paint.
+document.fonts.load('11px "Press Start 2P"').then(() => {
   new Phaser.Game(config);
 });

@@ -10,8 +10,19 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
-    // game.sound is global — music survives all scene transitions
     this.sound.add('theme', { loop: true, volume: 0.5 }).play();
-    this.scene.start('IntroScene');
+
+    // Render an off-screen dummy text with the game font so the canvas
+    // context caches the glyph atlas before IntroScene draws its first line.
+    const warmup = this.add.text(-9999, -9999, 'warmup', {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '11px',
+    });
+
+    // Wait one frame for the warmup text to paint, then start the intro.
+    this.time.delayedCall(0, () => {
+      warmup.destroy();
+      this.scene.start('IntroScene');
+    });
   }
 }
