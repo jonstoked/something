@@ -17,7 +17,7 @@ what do you think about this Skyler... we just go back and forth and add new stu
 every time you save a file, the browser will automatically reload with your changes. you don't need to restart anything.
 
 
-**ok cool yeah i get it, but where do i actually write code?**
+## ...ok cool yeah i get it, but where do i actually write code?
 
 the interesting files are all in `src/scenes/`:
 
@@ -28,7 +28,8 @@ the interesting files are all in `src/scenes/`:
 
 typescript is just javascript with types. if you've written js before, most of it will read fine. if something looks weird, just google "typescript [the thing that looks weird]".
 
-**ok cool yeah i get it, but how do i add my own code?**
+
+##...ok cool yeah i get it, but how do i add my own code?**
 
 1. [create a github account](https://github.com/signup)
 2. email me your github user name and i'll add you as a collaborator on the project
