@@ -17,7 +17,7 @@ what do you think about this Skyler... we just go back and forth and add new stu
 every time you save a file, the browser will automatically reload with your changes. you don't need to restart anything.
 
 
-## ...ok cool yeah i get it, but where do i actually write code?
+##...ok cool yeah i get it, but where do i actually write code?
 
 the interesting files are all in `src/scenes/`:
 
