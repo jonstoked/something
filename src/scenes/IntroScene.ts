@@ -13,7 +13,7 @@ function parseLine(raw: string): Segment[] {
 
 // '' entries become blank spacer lines.
 const INTRO_LINES = [
-  'the basement creeper society',
+  'the Thirty Degree Angle society',
   'met last thursday to determine',
   'the whereabouts of the lost',
   '[redacted].',
