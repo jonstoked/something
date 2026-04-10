@@ -2,6 +2,7 @@ check it out: [something-lovat.vercel.app](https://something-lovat.vercel.app/)
 
 what do you think about this Skyler... we just go back and forth and add new stuff to the game. no discussion, you just do whatever you want with it now and when you're done, i'll pick up the baton. then if we want to keep going or build something else, we can.
 
+
 **...ok cool, but how do i run this thing on my own machine?**
 
 1. install vs code
@@ -14,6 +15,7 @@ what do you think about this Skyler... we just go back and forth and add new stu
 8. in the terminal you'll see the url where the game is running, usually something like http://localhost:5173/ — go there to play the game
 
 every time you save a file, the browser will automatically reload with your changes. you don't need to restart anything.
+
 
 **ok cool yeah i get it, but where do i actually write code?**
 
